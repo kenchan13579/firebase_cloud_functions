@@ -24,6 +24,6 @@ exports.generateFamilyCode = functions.https.onRequest((req, res) => {
         family_id: familyId,
         code,
         expired_date: d
-    }).then(() => res.end('done'))
+    }).then(() => res.json({code}))
     .catch(err => res.status(500).end(err))
 })
