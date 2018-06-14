@@ -12,8 +12,8 @@ admin.initializeApp();
 
 
 // TODO: Remove expired codes, duplicate codes
-exports.generateFamilyCode = functions.https.onRequest((req, res) => {
-    const {familyId} = req.query;
+exports.generateFamilyCode = functions.https.onCall((data, context) => {
+    const {familyId} = data;
     const code = randomatic('0', 6);
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -24,6 +24,7 @@ exports.generateFamilyCode = functions.https.onRequest((req, res) => {
         family_id: familyId,
         code,
         expired_date: d
-    }).then(() => res.json({code}))
+    }).then(() => ( {code} ))
     .catch(err => res.status(500).end(err))
+
 })
