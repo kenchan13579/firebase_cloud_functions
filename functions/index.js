@@ -4,12 +4,13 @@ const randomatic = require("randomatic");
 
 admin.initializeApp();
 
-// TODO: Remove expired codes, duplicate codes
 exports.generateFamilyCode = functions.https.onCall((data, context) => {
   const { familyId } = data;
-  const code = randomatic("0", 6);
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
+  const { uid } = context.auth;
+
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "not authroized");
+  }
   if (familyId === undefined) {
     throw new functions.https.HttpsError(
       "invalid-argument",
@@ -18,14 +19,44 @@ exports.generateFamilyCode = functions.https.onCall((data, context) => {
   }
   return admin
     .firestore()
-    .collection("invite_codes")
-    .add({
-      family_id: familyId,
-      code,
-      expired_date: d
+    .doc(`/families/${familyId}`)
+    .get()
+    .then(familyData => {
+      if (!familyData || !familyData.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "family doesn't exist"
+        );
+      }
+      const existingCode = familyData.get("invite_codes");
+      const existingCodeExpiredTime = familyData.get("invite_codes_expired");
+      const now = familyData.readTime.toDate().getTime();
+      let promises = [];
+      if (
+        existingCode &&
+        (existingCodeExpiredTime && now <= existingCodeExpiredTime)
+      ) {
+        let response = { code: existingCode };
+        promises.push(response);
+      } else {
+        const code = randomatic("0", 6);
+        const d = familyData.readTime.toDate();
+        d.setDate(d.getDate() + 1);
+        const saveCodeToDB = familyData.ref.set(
+          {
+            invite_codes: code,
+            invite_codes_expired: d.getTime()
+          },
+          { merge: true }
+        );
+        promises = [{ code }, saveCodeToDB];
+      }
+      return Promise.all(promises);
     })
-    .then(() => ({ code }))
-    .catch(err => res.status(500).end(err));
+    .then(([result]) => result)
+    .catch(err => {
+      throw new functions.https.HttpsError(err.code, err.message, err.details);
+    });
 });
 
 exports.pushNewFeedsToFamilyMembers = functions.firestore
@@ -44,7 +75,6 @@ exports.pushNewFeedsToFamilyMembers = functions.firestore
       return Promise.resolve("no new post created");
     }
 
-    console.log("new post id ->", newPostIds);
     const getPostData = admin
       .firestore()
       .doc(`/posts-data/${newPostIds[0]}`)
