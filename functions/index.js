@@ -28,8 +28,8 @@ exports.generateFamilyCode = functions.https.onCall((data, context) => {
           "family doesn't exist"
         );
       }
-      const existingCode = familyData.get("invite_codes");
-      const existingCodeExpiredTime = familyData.get("invite_codes_expired");
+      const existingCode = familyData.get("invite_code");
+      const existingCodeExpiredTime = familyData.get("invite_code_expired");
       const now = familyData.readTime.toDate().getTime();
       let promises = [];
       if (
@@ -44,8 +44,8 @@ exports.generateFamilyCode = functions.https.onCall((data, context) => {
         d.setDate(d.getDate() + 1);
         const saveCodeToDB = familyData.ref.set(
           {
-            invite_codes: code,
-            invite_codes_expired: d.getTime()
+            invite_code: code,
+            invite_code_expired: d.getTime()
           },
           { merge: true }
         );
