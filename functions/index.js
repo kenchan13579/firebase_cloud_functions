@@ -285,3 +285,45 @@ exports.pushNewFeedsToFamilyMembers = functions.firestore
       })
       .catch(error => console.log("error", error));
   });
+
+exports.pushOnNewMessage = functions.firestore
+  .document(`/${COLLECTION_NAMES.CHATS}/{conversationId}/messages/{messageId}`)
+  .onCreate((snapshot, context) => {
+    const data = snapshot.data();
+    let senderId = data.author;
+    let messageText = data.text;
+    console.log(`/${COLLECTION_NAMES.CHATS}/${context.params.conversationId}`);
+    const conversationUsers = admin
+      .firestore()
+      .doc(`/${COLLECTION_NAMES.CHATS}/${context.params.conversationId}`)
+      .get();
+    return conversationUsers
+      .then(snapshot => {
+        const receiverId = Object.keys(snapshot.get("users")).filter(
+          id => id !== senderId
+        )[0];
+        console.log(snapshot.data());
+        console.log(receiverId);
+
+        const userRequests = [senderId, receiverId].map(id =>
+          admin
+            .firestore()
+            .doc(`/${COLLECTION_NAMES.USERS}/${id}`)
+            .get()
+        );
+        return Promise.all(userRequests);
+      })
+      .then(([sender, receiver]) => {
+        const senderName = getFirstName(sender.get("name"));
+        const receiverToken = receiver.get("fcmToken");
+        const payload = {
+          notification: {
+            title: `New message from ${senderName}`,
+            body: messageText
+          }
+        };
+        console.log(senderName, receiverToken, payload);
+        return admin.messaging().sendToDevice([receiverToken], payload);
+      });
+    // console.log(conversationUsers, receiverId, senderId);
+  });
